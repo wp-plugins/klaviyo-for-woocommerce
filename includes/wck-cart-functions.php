@@ -141,10 +141,15 @@ function wck_mark_cart_inactive() {
  */
 function wck_insert_checkout_tracking($checkout) {
 
-  global $current_user;
-  wp_reset_query();
+  if(version_compare(get_bloginfo('version'),'4.5', '<=') ){
+    global $current_user;
+    wp_reset_query();
 
-  get_currentuserinfo();
+    get_currentuserinfo();
+  }else{
+    $current_user = wp_get_current_user();
+  }
+  
 
   $cart = WC()->cart;
   $event_data = array(
@@ -160,26 +165,37 @@ function wck_insert_checkout_tracking($checkout) {
   );
 
   foreach ( $cart->get_cart() as $cart_item_key => $values ) {
+    if ( version_compare( WC()->version, '3.0', ">=" ) ) {
+      $product_details = array(
+        'Name'  =>  $product->get_name(),
+        'URL'   =>  get_permalink( $product->get_id() ),
+        'Description' =>  $product->get_description(),
+        'ProductID' => $product->get_id()
+      );
+    } else {
+      $product_details = array(
+        'Name' => $product->post->post_title,
+        'URL' => $product->post->guid,
+        'ProductID' => $product->id,
+        'Description' => $product->post->post_content,
+      );
+    }
+
     $product = $values['data'];
 
-    $event_data['$extra']['Items'] []= array(
+    $event_data['$extra']['Items'] []= array_merge($product_details, array(
       'Quantity' => $values['quantity'],
-      'ProductID' => $product->id,
-      'Name' => $product->post->post_title,
-      'URL' => $product->post->guid,
       'Images' => array(
         array(
           'URL' => wp_get_attachment_url(get_post_thumbnail_id($product->id))
         )
       ),
-      'Description' => $product->post->post_content,
       'Variation' => $values['variation'],
-
       'SubTotal' => $values['line_subtotal'],
       'Total' => $values['line_subtotal_tax'],
       'LineTotal' => $values['line_total'],
       'Tax' => $values['line_tax']
-    );
+    ));
   }
 
   if ( empty($event_data['$extra']['Items']) ) {
